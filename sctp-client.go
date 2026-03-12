@@ -12,6 +12,7 @@ func main() {
 	// 1. Define command-line flags
 	serverIP := flag.String("ip", "127.0.0.1", "SCTP server IP address (IPv4 or IPv6)")
 	port := flag.Int("port", 5000, "SCTP server port")
+	lport := flag.Int("lport", 0, "Local source port to bind to (0 for ephemeral)")
 	msg := flag.String("msg", "Ping from native Go SCTP Client", "Message to send")
 	flag.Parse()
 
@@ -32,7 +33,16 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to create IPv4 SCTP socket: %v", err)
 		}
-		
+
+		// Bind to a specific local port if requested
+		if *lport > 0 {
+			bindSA := &syscall.SockaddrInet4{Port: *lport}
+			// Leaving bindSA.Addr empty defaults to 0.0.0.0 (all interfaces)
+			if err := syscall.Bind(fd, bindSA); err != nil {
+				log.Fatalf("Failed to bind local IPv4 port %d: %v", *lport, err)
+			}
+		}
+
 		sa := &syscall.SockaddrInet4{Port: *port}
 		copy(sa.Addr[:], ip4)
 		sockaddr = sa
@@ -42,15 +52,29 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to create IPv6 SCTP socket: %v", err)
 		}
-		
+
+		// Bind to a specific local port if requested
+		if *lport > 0 {
+			bindSA := &syscall.SockaddrInet6{Port: *lport}
+			// Leaving bindSA.Addr empty defaults to :: (all interfaces)
+			if err := syscall.Bind(fd, bindSA); err != nil {
+				log.Fatalf("Failed to bind local IPv6 port %d: %v", *lport, err)
+			}
+		}
+
 		sa := &syscall.SockaddrInet6{Port: *port}
 		copy(sa.Addr[:], ip)
 		sockaddr = sa
 	}
+	
 	// Ensure the socket is always closed when the function exits
 	defer syscall.Close(fd)
 
-	fmt.Printf("Connecting to %s:%d...\n", *serverIP, *port)
+	if *lport > 0 {
+		fmt.Printf("Bound to local port %d, connecting to %s:%d...\n", *lport, *serverIP, *port)
+	} else {
+		fmt.Printf("Using ephemeral local port, connecting to %s:%d...\n", *serverIP, *port)
+	}
 
 	// 3. Connect to the server
 	if err := syscall.Connect(fd, sockaddr); err != nil {
