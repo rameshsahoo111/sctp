@@ -54,8 +54,20 @@ func handleClient(fd int, addr syscall.Sockaddr) {
 	// Extract the client IP/Port from the raw Sockaddr struct
 	var clientIP string
 	if inet4, ok := addr.(*syscall.SockaddrInet4); ok {
-		clientIP = fmt.Sprintf("%d.%d.%d.%d:%d", 
+		clientIP = fmt.Sprintf("%d.%d.%d.%d:%d",
 			inet4.Addr[0], inet4.Addr[1], inet4.Addr[2], inet4.Addr[3], inet4.Port)
+	}
+
+	// Extract the server's local IP/Port for this specific connection
+	var serverIP string
+	localAddr, err := syscall.Getsockname(fd)
+	if err == nil {
+		if inet4, ok := localAddr.(*syscall.SockaddrInet4); ok {
+			serverIP = fmt.Sprintf("%d.%d.%d.%d:%d",
+				inet4.Addr[0], inet4.Addr[1], inet4.Addr[2], inet4.Addr[3], inet4.Port)
+		}
+	} else {
+		serverIP = "unknown-ip"
 	}
 
 	// Read data from the socket
@@ -74,8 +86,9 @@ func handleClient(fd int, addr syscall.Sockaddr) {
 		hostname = "unknown-host"
 	}
 
-	// Send reply
-	replyMsg := fmt.Sprintf("Hello from SCTP Server from %s and your client IP is %s\n", hostname, clientIP)
+	// Send reply including Server Hostname, Server IP, and Client IP
+	replyMsg := fmt.Sprintf("Hello from SCTP Server! My Hostname: %s, My IP: %s | Your Client IP: %s\n", hostname, serverIP, clientIP)
+	
 	_, err = syscall.Write(fd, []byte(replyMsg))
 	if err != nil {
 		log.Printf("Write failed: %v", err)
